@@ -33,19 +33,27 @@ machine(Directory, "Directory protocol")
   //=============================================================
 
   state_declaration(State, desc="Directory states", default="Directory_State_I") {
-
+    /* ECE552 Assignment 5 - BEGIN CODE */
     //=====================
     //ECE552: Stable States
     //=====================
 
     I, AccessPermission:Invalid, desc="Not Present/Invalid";
     M, AccessPermission:Read_Write, desc="Modified";
-
+    
     /* ECE552: Complete this section here */
-
+    S, AccessPermission:Read_Only, desc = "Shared";
     //========================
     //ECE552: Transient States
     //========================
+    
+    //during data acquire
+    IS_D, AccessPermission: Busy, desc = "Loading data from memory for a sharer";
+    IM_D, AccessPermission: Busy, desc = "Loading data from memory for a modifier";
+    MS_D, AccessPermission: Busy, desc = "Downgrading from M to S, directory waiting data";
+    MS_A, AccessPermission: Busy, desc = "Downgrading from M to S, directory wrote data to memroy, waint memory ack";
+    MI_A, AccessPermission: Busy, desc = "Downgrading from M to I, pending Memory Ack";
+/* ECE552 Assignment 5 - END CODE */
 
     /* ECE552: Complete this section here */
   }
@@ -536,6 +544,148 @@ getDirectoryEntry(address).Sharers);
   // =============================================================================
 
   /* ECE552: Complete this section here */
+  /* ECE552 Assignment 5 - BEGIN CODE */
+  //From I
+  transition(I, GETS, IS_D){
+    vv_allocateTBEFromRequestNet;
+    qf_queueMemoryFetchRequest;
+    i_popIncomingRequestQueue;
+  }
 
+  transition(I, GETM, IM_D){
+    vv_allocateTBEFromRequestNet;
+    e_ownerIsRequestor;
+    qf_queueMemoryFetchRequest;
+    i_popIncomingRequestQueue;
+  }
 
+  transition(I, {PUTS_NotLast, PUTS_Last, PUTM_NotOwner}){
+    a_sendWriteBackAck;
+    i_popIncomingRequestQueue;
+  }
+
+  //From IS_D
+  transition(IS_D, Memory_Data, S){
+    w_deallocateTBE;
+    ars1_addRequestorToSharers;
+    d_sendData;
+    qm_popMemQueue;
+  }
+
+  transition(IS_D, {GETS, GETM}, IS_D){
+    z_stall;
+  }
+
+  //from IM_D
+  transition(IM_D, Memory_Data, M){
+    w_deallocateTBE;
+    d_sendData;
+    qm_popMemQueue;
+  }
+
+  transition(IM_D, {GETM, GETS}, S){
+    z_stall;
+  }
+
+  //From S
+  transition(S, {GETS}, S){
+    ds_sendSharedData;
+    ars2_addRequestorToSharers;
+    i_popIncomingRequestQueue;
+  }
+
+  transition(S, {GETM}, M){
+    ds2_sendSharedData;
+    fwm_sendFwdInvToSharersMinusRequestor;
+    cs_clearSharers;
+    e_ownerIsRequestor;
+    i_popIncomingRequestQueue;
+  }
+
+  transition(S, {PUTS_NotLast, PUTM_NotOwner}, S){
+    kk_removeRequestSharer;
+    a_sendWriteBackAck;
+    i_popIncomingRequestQueue;
+  }
+  
+  transition(S, {PUTS_Last}, I){
+    kk_removeRequestSharer;
+    a_sendWriteBackAck;
+    i_popIncomingRequestQueue;
+  }
+
+  //From M
+  //transition from M to S need to write data back to directory and memory, as we implement the directory such that:
+  //when it's in shared, it should have most up-to-date data
+
+  transition(M, {GETS}, MS_D){
+    vv_allocateTBEFromRequestNet;
+    f_forwardRequest;
+    aos_addOwnertoSharers;
+    ars2_addRequestorToSharers;
+    c_clearOwner;
+    i_popIncomingRequestQueue;
+  }
+
+  transition(M, {GETM}, M){
+    f_forwardRequest;
+    e_ownerIsRequestor;
+    i_popIncomingRequestQueue;
+  }
+
+  transition(M, {PUTS_NotLast, PUTS_Last, PUTM_NotOwner}, M){
+    a_sendWriteBackAck;
+    i_popIncomingRequestQueue;
+  }
+
+  transition(M, {PUTM_Owner}, MI_A){
+    vv_allocateTBEFromRequestNet;
+    pl_writeDataToDirectory;
+    c_clearOwner;
+    lq_queueMemoryWBRequest;
+    i_popIncomingRequestQueue;
+  }
+
+  //from MI_A
+  transition(MI_A, {Memory_Ack}, I){
+    la_sendWriteBackAck;
+    w_deallocateTBE;
+    qm_popMemQueue;
+  }
+
+  transition(MI_A, {GETM,GETS, PUTS_Last, PUTS_NotLast, PUTM_NotOwner, Data}, MI_A){
+    z_stall;
+  }
+
+  //from MS_D
+  //transition from M to S need to write data back to directory and memory, as we implement the directory such that:
+  //when it's in shared, it should have most up-to-date data
+  //MS_D transition to MS_A when data from previous-owner M is available
+  transition(MS_D, {Data}, MS_A){
+    lq2_queueMemoryWBRequest;
+    pl2_writeDataToDirectory;
+    pr_popIncomingResponseQueue
+  }
+
+  transition(MS_D, {PUTS_NotLast, PUTM_NotOwner, PUTM_NotOwner}, MS_D){
+    kk_removeRequestSharer;
+    a_sendWriteBackAck;
+    i_popIncomingRequestQueue;
+  }
+
+  transition(MS_D, {PUTS_Last}, MS_D){
+    z_stall;
+  }
+
+  //From MS_A
+  transition(MS_A, {Memory_Ack}, S){
+    w_deallocateTBE;
+    qm_popMemQueue;
+  }
+
+  transition(MS_A, {GETS, GETM}, MS_A){
+    z_stall;
+
+  }
+  /* ECE552 Assignment 5 - END CODE */
 }
