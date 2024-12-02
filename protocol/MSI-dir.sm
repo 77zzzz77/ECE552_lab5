@@ -548,6 +548,7 @@ getDirectoryEntry(address).Sharers);
   //From I
   transition(I, GETS, IS_D){
     vv_allocateTBEFromRequestNet;
+    ars2_addRequestorToSharers;
     qf_queueMemoryFetchRequest;
     i_popIncomingRequestQueue;
   }
@@ -576,6 +577,11 @@ getDirectoryEntry(address).Sharers);
     z_stall;
   }
 
+  transition(IS_D, PUTM_NotOwner, IS_D){
+    a_sendWriteBackAck;
+    i_popIncomingRequestQueue;
+  }
+
   //from IM_D
   transition(IM_D, Memory_Data, M){
     w_deallocateTBE;
@@ -585,6 +591,11 @@ getDirectoryEntry(address).Sharers);
 
   transition(IM_D, {GETM, GETS}, S){
     z_stall;
+  }
+
+  transition(IM_D, {PUTM_NotOwner, PUTS_NotLast}){
+    a_sendWriteBackAck;
+    i_popIncomingRequestQueue;
   }
 
   //From S
@@ -623,7 +634,7 @@ getDirectoryEntry(address).Sharers);
     f_forwardRequest;
     aos_addOwnertoSharers;
     ars2_addRequestorToSharers;
-    c_clearOwner;
+    //c_clearOwner;
     i_popIncomingRequestQueue;
   }
 
@@ -641,7 +652,7 @@ getDirectoryEntry(address).Sharers);
   transition(M, {PUTM_Owner}, MI_A){
     vv_allocateTBEFromRequestNet;
     pl_writeDataToDirectory;
-    c_clearOwner;
+    //c_clearOwner;
     lq_queueMemoryWBRequest;
     i_popIncomingRequestQueue;
   }
@@ -651,6 +662,7 @@ getDirectoryEntry(address).Sharers);
     la_sendWriteBackAck;
     w_deallocateTBE;
     qm_popMemQueue;
+    c_clearOwner;
   }
 
   transition(MI_A, {GETM,GETS, PUTS_Last, PUTS_NotLast, PUTM_NotOwner, Data}, MI_A){
@@ -667,7 +679,11 @@ getDirectoryEntry(address).Sharers);
     pr_popIncomingResponseQueue
   }
 
-  transition(MS_D, {PUTS_NotLast, PUTM_NotOwner, PUTM_NotOwner}, MS_D){
+  transition(MS_D, {GETS, GETM}, MS_D){
+    z_stall;
+  }
+
+  transition(MS_D, {PUTS_NotLast, PUTM_Owner, PUTM_NotOwner}, MS_D){
     kk_removeRequestSharer;
     a_sendWriteBackAck;
     i_popIncomingRequestQueue;
@@ -680,7 +696,18 @@ getDirectoryEntry(address).Sharers);
   //From MS_A
   transition(MS_A, {Memory_Ack}, S){
     w_deallocateTBE;
+    c_clearOwner;
     qm_popMemQueue;
+  }
+
+  transition(MS_A, {PUTS_NotLast, PUTM_Owner, PUTM_NotOwner}){
+    kk_removeRequestSharer;
+    a_sendWriteBackAck;
+    i_popIncomingRequestQueue;
+  }
+
+  transition(MS_A, PUTS_Last, MS_A){
+    z_stall;
   }
 
   transition(MS_A, {GETS, GETM}, MS_A){

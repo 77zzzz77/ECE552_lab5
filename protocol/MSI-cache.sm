@@ -614,7 +614,7 @@ machine(L1Cache, "MSI L1 Cache")
 
   //From I
   
-  transition(I, {Load,Ifetch} IS_D){ //L1 unified cache for both data and instr
+  transition(I, {Load,Ifetch}, IS_D){ //L1 unified cache for both data and instr
     p_profileMiss;
     i_allocateL1CacheBlock;
     v_allocateTBE;
@@ -631,7 +631,7 @@ machine(L1Cache, "MSI L1 Cache")
   }
 
   //From IS_D
-  transition(IS_D, {Load, Ifetch, Store, Replace, Inv}, IS_D){
+  transition(IS_D, {Load, Ifetch, Store, Replacement, Inv}, I){
     z_stall;
   }
 
@@ -647,8 +647,16 @@ machine(L1Cache, "MSI L1 Cache")
     z_stall;
   }
 
-  transition(IM_AD, {Data_from_Dir_No_Acks, Data_from_Owner}, IM_A){
+  transition(IM_AD, {Data_from_Dir_No_Acks, Data_from_Owner}, M){
     u_writeDataToCache;
+    w_deallocateTBE;
+    sx_store_hit;
+    n_popResponseQueue;
+  }
+
+  transition(IM_AD, Data_from_Dir_Ack_Cnt_Last,M){
+    u_writeDataToCache;
+    q_updateAckCount;
     w_deallocateTBE;
     sx_store_hit;
     n_popResponseQueue;
@@ -676,6 +684,7 @@ machine(L1Cache, "MSI L1 Cache")
   }
 
   transition(IM_A, Inv_Ack_all, M){
+    q_updateAckCount;
     w_deallocateTBE;
     sx_store_hit;
     n_popResponseQueue;
@@ -700,6 +709,7 @@ machine(L1Cache, "MSI L1 Cache")
     bs_issuePUTS;
     v_allocateTBE;
     x_copyDataFromCacheToTBE;
+    h_deallocateL1CacheBlock;
   }
 
   transition(S, Inv, I){
@@ -710,8 +720,8 @@ machine(L1Cache, "MSI L1 Cache")
   }
 
   //From SM_AD
-  transition(SM_AD, {Load,Ifetch} SM_AD){
-    rx_load_hit;
+  transition(SM_AD, {Load,Ifetch}, SM_AD){
+    r_load_hit;
     m_popMandatoryQueue;
   }
 
@@ -731,6 +741,14 @@ machine(L1Cache, "MSI L1 Cache")
     n_popResponseQueue;
   }
 
+  transition(SM_AD, Data_from_Dir_Ack_Cnt_Last, M){
+    q_updateAckCount;
+    u_writeDataToCache;
+    w_deallocateTBE;
+    sx_store_hit;
+    n_popResponseQueue;
+  }
+
   transition(SM_AD, {Data_from_Dir_Ack_Cnt}, SM_A){
     u_writeDataToCache;
     q_updateAckCount;
@@ -744,8 +762,8 @@ machine(L1Cache, "MSI L1 Cache")
   }
 
   //From SM_A
-  transition(SM_A, {Load,Ifetch} SM_A){
-    rx_load_hit;
+  transition(SM_A, {Load,Ifetch}, SM_A){
+    r_load_hit;
     m_popMandatoryQueue;
   }
 
@@ -759,6 +777,7 @@ machine(L1Cache, "MSI L1 Cache")
   }
 
   transition(SM_A, Inv_Ack_all, M){
+    q_updateAckCount;
     w_deallocateTBE;
     sx_store_hit;
     n_popResponseQueue;
@@ -813,7 +832,7 @@ machine(L1Cache, "MSI L1 Cache")
     o_popForwardedRequestQueue;
   }
 
-  transition(MI_A, WB_ACK, I){
+  transition(MI_A, WB_Ack, I){
     forward_eviction_to_cpu;
     w_deallocateTBE;
     o_popForwardedRequestQueue;
@@ -824,12 +843,12 @@ machine(L1Cache, "MSI L1 Cache")
     z_stall;
   }
 
-  transition(SI_A, Inv, SI_A){
+  transition(SI_A, Inv, II_A){
     fi_sendInvAck;
     o_popForwardedRequestQueue;
   }
 
-  transition(SI_A, WB_ACK, I){
+  transition(SI_A, WB_Ack, I){
     forward_eviction_to_cpu;
     w_deallocateTBE;
     o_popForwardedRequestQueue;
@@ -840,7 +859,7 @@ machine(L1Cache, "MSI L1 Cache")
     z_stall;
   }
 
-  transition(II_A, WB_ACK, I){
+  transition(II_A, WB_Ack, I){
     forward_eviction_to_cpu;
     w_deallocateTBE;
     o_popForwardedRequestQueue;
